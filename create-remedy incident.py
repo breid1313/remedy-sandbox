@@ -44,6 +44,16 @@ entry = {
     }  
 }
 
+# closure template
+CLOSE_TEMPLATE = {
+    "values": {                                               
+        "Description" : "Rest API: Resolve Incident using RestAPI",                                               
+        "Status" : "Resolved",                                               
+        "Status_Reason" : "Future Enhancement",                                               
+        "Resolution" : "Test Resolution Text"
+    }
+}
+
 print("Testing HTTP API...")
 try:
     # set the token url
@@ -71,15 +81,47 @@ try:
 
     # post the entry
     print("creating a new incident...")
-    incident_url = HTTP_BASE_URL + "/arsys/v1/entry/HPD:IncidentInterface_Create?fields=values(Incident Number)"
+    # return incident number and req id via ?fields=values(xx,yy) query
+    incident_url = HTTP_BASE_URL + "/arsys/v1/entry/HPD:IncidentInterface_Create?fields=values(Incident Number, Request ID)"
     response = requests.request("POST", incident_url, json=entry, headers=reqHeaders, verify=False)
     if response.status_code == 201:
         print("successfully created a new incident!")
         # TODO link to incident
         # clear link is not in the response headers or body
         response_json = response.json()
+        # capture the incident ID
         inc_num = response_json["values"]["Incident Number"]
-        print("incident ID: %s" % inc_num)
+        req_id = response_json["values"]["Request ID"]
+        print("incident ID: %s\nrequest ID: %s" % (inc_num, req_id ))
+
+    # dev: static ID so we dont always have to create
+    inc_num = "INC000000000245"
+    req_id = "000000000000145"
+
+    # get the created entry
+    # TODO url encode enpoints with spaces?
+    # getting too many incidents back
+    print("Retrieving incident %s from the API..." % inc_num)
+    get_url = HTTP_BASE_URL + "/arsys/v1/entry/HPD:IncidentInterface_Create/{}".format(req_id)
+    response = requests.request("GET", get_url, headers=reqHeaders, verify=False)
+    if response.status_code == 200:
+        print("Success")
+    else:
+        print("Failed to get incident %s" % inc_num)
+
+    response_json = response.json()
+    req_id = response_json["values"]["Request ID"]
+
+    # close the incident / update values
+    print("Updating incident...")
+    close_url = HTTP_BASE_URL + "/arsys/v1/entry/HPD:IncidentInterface_Create/{}".format(req_id) # TODO same as get url. cleanup.
+    response = requests.request("PUT", close_url, json=CLOSE_TEMPLATE, headers=reqHeaders, verify=False)
+    # verify that the changes took
+    response = requests.request("GET", get_url, headers=reqHeaders, verify=False)
+    response_json = response.json()
+    for key, _ in CLOSE_TEMPLATE["values"].items():
+        assert CLOSE_TEMPLATE["values"][key] == response_json["values"][key]
+    print("Incident update success")
 
     # release the token
     # returns 204 no content. this is ok
